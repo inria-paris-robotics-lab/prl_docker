@@ -1,0 +1,147 @@
+################################
+# Base image
+################################
+ARG ROS_DISTRO=jazzy
+
+FROM ros:${ROS_DISTRO} AS base
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Mise à jour système et installation des outils de base
+RUN apt-get update && apt-get -y upgrade \
+    && apt-get install -y --no-install-recommends \
+    curl \
+    software-properties-common \
+    wget \
+    lsb-release \
+    gnupg \
+    gosu \
+    acl \
+    sudo \
+    && rm -rf /var/lib/apt/lists/*
+
+################################
+# Complete ros2 image with gazebo
+################################
+
+FROM base AS ros2_complete
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN wget -q https://packages.osrfoundation.org/gazebo.gpg -O /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg \
+  && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] http://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/gazebo-stable.list > /dev/null \
+  && apt-get update && apt-get install -q -y --no-install-recommends \
+    ros-"${ROS_DISTRO}"-ros-gz \
+    ros-"${ROS_DISTRO}"-gz-ros2-control \
+  && rm -rf /var/lib/apt/lists/*
+
+################################
+#  Dev tools and non root user
+################################
+
+FROM ros2_complete AS full
+ENV DEBIAN_FRONTEND=noninteractive
+
+# 1. Configuration ENV pour l'affichage et DBUS
+ENV XDG_RUNTIME_DIR=/tmp/runtime-ros
+
+# Install xauth for gui applications
+RUN apt-get update && apt-get install -q -y --no-install-recommends \
+    xauth \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install docker client
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
+  && install -m 0755 -d /etc/apt/keyrings \
+  && curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc \
+  && chmod a+r /etc/apt/keyrings/docker.asc \
+  && echo \
+      "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+      $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable" | \
+      tee /etc/apt/sources.list.d/docker.list > /dev/null \
+  && apt-get update \
+  && apt-get install -y --no-install-recommends docker-ce-cli docker-compose-plugin \
+  && rm -rf /var/lib/apt/lists/*
+
+# Install dev tools + GUI support
+RUN apt-get update && apt-get install -y --no-install-recommends\
+  byobu \
+  bash-completion \
+  net-tools \
+  nano \
+  vim \
+  git \
+  tmux \
+  python3-vcstool \
+  terminator \
+  dbus-x11 \
+  libcanberra-gtk-module \
+  libcanberra-gtk3-module \
+  at-spi2-core \
+  can-utils \
+  && rm -rf /var/lib/apt/lists/*
+
+# Générer l'ID machine DBUS (statique)
+RUN mkdir -p /var/lib/dbus && dbus-uuidgen > /var/lib/dbus/machine-id
+
+# Install Pinocchio (RobotPkg)
+RUN mkdir -p /etc/apt/keyrings \
+ && curl -fsSL http://robotpkg.openrobots.org/packages/debian/robotpkg.asc | gpg --dearmor -o /etc/apt/keyrings/robotpkg.gpg \
+ && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/robotpkg.gpg] http://robotpkg.openrobots.org/packages/debian/pub $(lsb_release -cs) robotpkg" > /etc/apt/sources.list.d/robotpkg.list \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends robotpkg-py3*-pinocchio \
+ && rm -rf /var/lib/apt/lists/*
+
+# Enable byobu
+RUN byobu-enable
+
+# Install VISP
+RUN apt-get update && apt-get install -y --no-install-recommends libvisp-dev libvisp-doc visp-images-data \
+    && rm -rf /var/lib/apt/lists/*
+
+# --- USER CONFIGURATION ---
+ARG USERNAME=ros
+ARG USER_UID=1000
+ARG USER_GID=1000
+
+RUN if getent passwd ubuntu; then userdel -f -r ubuntu; fi \
+    && if getent group ubuntu; then groupdel ubuntu; fi || true
+
+# Création de l'utilisateur
+RUN getent group $USER_GID || groupadd -g $USER_GID $USERNAME \
+  && useradd --uid $USER_UID --gid $USER_GID --create-home --shell /bin/bash $USERNAME \
+  && echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/$USERNAME \
+  && chmod 0440 /etc/sudoers.d/$USERNAME
+
+# Création des dossiers de config (en tant qu'utilisateur pour les droits initiaux)
+USER ${USERNAME}
+RUN mkdir -p /home/${USERNAME}/.cache /home/${USERNAME}/.config /home/${USERNAME}/.local
+
+# Retour en ROOT pour la suite
+USER root
+
+# --- ENVIRONMENT SETUP ---
+
+RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /home/"${USERNAME}"/.bashrc \
+  && printf "export PS1=\"\\[\\e]0;\\u@\$ROS_DISTRO-container: \\w\\a\\]\${debian_chroot:+(\$debian_chroot)}\\[\\033[01;34m\\]\\u@\$ROS_DISTRO-container\\[\\033[00m\\]:\\[\\033[01;35m\\]\\w\\[\\033[00m\\]\\$ \"\n" >> /home/${USERNAME}/.bashrc \
+  && echo "export ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST" >> /home/${USERNAME}/.bashrc
+
+# Config Tmux
+COPY --chown=${USERNAME}:${USERNAME} utils/tmux.conf /home/${USERNAME}/.tmux.conf
+
+# Config PINOCCHIO & PYTHON PATHS
+RUN PYTHON_VER=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')") \
+ && echo "export PATH=/opt/openrobots/bin:\$PATH" >> /home/${USERNAME}/.bashrc \
+ && echo "export PKG_CONFIG_PATH=/opt/openrobots/lib/pkgconfig:\$PKG_CONFIG_PATH" >> /home/${USERNAME}/.bashrc \
+ && echo "export LD_LIBRARY_PATH=/opt/openrobots/lib:\$LD_LIBRARY_PATH" >> /home/${USERNAME}/.bashrc \
+ && echo "export CMAKE_PREFIX_PATH=/opt/openrobots:\$CMAKE_PREFIX_PATH" >> /home/${USERNAME}/.bashrc \
+ && echo "export PYTHONPATH=\$PYTHONPATH:/opt/openrobots/lib/python${PYTHON_VER}/site-packages" >> /home/${USERNAME}/.bashrc \
+ && echo "export PYTHONPATH=\$PYTHONPATH:/home/ros/share/install/lib/python${PYTHON_VER}/site-packages" >> /home/${USERNAME}/.bashrc \
+ && echo "export PYTHONPATH=\$PYTHONPATH:/openrobots/lib/python${PYTHON_VER}/site-packages" >> /home/${USERNAME}/.bashrc
+
+# --- FINAL SETUP ---
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+RUN mkdir -p /.entrypoint-setup
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["bash"]
