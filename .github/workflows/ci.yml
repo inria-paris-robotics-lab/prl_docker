@@ -54,7 +54,7 @@ jobs:
       - name: Build and push Base Image
         uses: docker/build-push-action@v5
         with:
-          context: base/
+          context: ./base/
           file: Dockerfile.base
           push: true
           build-args: ROS_DISTRO=${{ matrix.ros_distro }}
@@ -101,8 +101,8 @@ jobs:
       - name: Build and push Mantis Image
         uses: docker/build-push-action@v5
         with:
-          context: robots/mantis/
-          file: robots/mantis/Dockerfile.mantis
+          context: ./robots/mantis/
+          file: Dockerfile.mantis
           push: true
           build-args: |
             BASE_IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}:${{ matrix.ros_distro }}-latest
