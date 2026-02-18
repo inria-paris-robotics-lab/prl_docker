@@ -70,5 +70,5 @@ RUN mkdir -p /home/${USERNAME}/share \
 USER root
 WORKDIR /home/${USERNAME}
 
-COPY setup_mantis.sh /.entrypoint-setup/setup_mantis.sh
+COPY robots/mantis/setup_mantis.sh /.entrypoint-setup/setup_mantis.sh
 RUN chmod +x /.entrypoint-setup/setup_mantis.sh

@@ -126,7 +126,7 @@ RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /home/"${USERNAME}"/.bash
   && echo "export ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST" >> /home/${USERNAME}/.bashrc
 
 # Config Tmux
-COPY --chown=${USERNAME}:${USERNAME} utils/tmux.conf /home/${USERNAME}/.tmux.conf
+COPY --chown=${USERNAME}:${USERNAME} base/utils/tmux.conf /home/${USERNAME}/.tmux.conf
 
 # Config PINOCCHIO & PYTHON PATHS
 RUN PYTHON_VER=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')") \
@@ -139,7 +139,8 @@ RUN PYTHON_VER=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.v
  && echo "export PYTHONPATH=\$PYTHONPATH:/openrobots/lib/python${PYTHON_VER}/site-packages" >> /home/${USERNAME}/.bashrc
 
 # --- FINAL SETUP ---
-COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY base/entrypoint.sh /usr/local/bin/entrypoint.sh
+
 RUN chmod +x /usr/local/bin/entrypoint.sh
 RUN mkdir -p /.entrypoint-setup
 
