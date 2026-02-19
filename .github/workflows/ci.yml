@@ -41,9 +41,8 @@ jobs:
         run: |
           echo "DATE_TAG=$(date +'%Y-%m')" >> $GITHUB_ENV
 
-      # --- LOGIC OF BACKUP N-1 (Monthly only) ---
+      # --- LOGIC OF BACKUP N-1 ---
       - name: Backup latest to previous (Monthly only)
-        if: github.event_name == 'schedule'
         run: |
           docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}:${{ matrix.ros_distro }}-latest || true
           docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}:${{ matrix.ros_distro }}-latest \
@@ -88,9 +87,8 @@ jobs:
       - name: Set date
         run: echo "DATE_TAG=$(date +'%Y-%m')" >> $GITHUB_ENV
 
-      # --- LOGIQUE DE BACKUP MANTIS (Monthly only) ---
+      # --- LOGIQUE DE BACKUP MANTIS ---
       - name: Backup latest to previous (Monthly only)
-        if: github.event_name == 'schedule'
         run: |
           docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_MANTIS }}:${{ matrix.ros_distro }}-latest || true
           docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_MANTIS }}:${{ matrix.ros_distro }}-latest \
