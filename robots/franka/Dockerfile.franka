@@ -1,0 +1,75 @@
+# Global ARG before FROM
+ARG BASE_IMAGE=ghcr.io/votre-labo/prl_docker-base:humble-latest
+FROM ${BASE_IMAGE}
+
+# Re-declare ARGS for this stage
+ARG ROS_DISTRO=humble
+ARG USERNAME=ros
+ARG FRANKA_ROS2_VERSION=v2.1.0
+ARG LIB_FRANKA_VERSION=0.15.0
+ENV DEBIAN_FRONTEND=noninteractive
+
+# --- SYSTEM INSTALLATION (ROOT) ---
+USER root
+
+# Install ROS2 dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3-argcomplete \
+    python3-pip \
+    ros-dev-tools \
+    ros-${ROS_DISTRO}-ros2-control \
+    ros-${ROS_DISTRO}-ros2-controllers \
+    ros-${ROS_DISTRO}-moveit \
+    ros-${ROS_DISTRO}-tf-transformations \
+    ros-${ROS_DISTRO}-image-pipeline \
+    && rm -rf /var/lib/apt/lists/*
+
+# Fix for tf-transformations (Pin version to satisfy Hadolint DL3013)
+RUN pip3 install --no-cache-dir transforms3d==0.4.1
+
+################################
+# Dependencies built from source
+################################
+
+# --- PREPARE SOURCES (USER) ---
+USER ${USERNAME}
+WORKDIR /home/${USERNAME}/ros2_utils_ws/src
+
+# Clone Franka ROS 2
+RUN git clone -b "${FRANKA_ROS2_VERSION}" https://github.com/frankarobotics/franka_ros2.git franka_ros2 \
+    && vcs import . < franka_ros2/franka.repos --recursive --skip-existing
+
+# Setup specific libfranka version
+WORKDIR /home/${USERNAME}/ros2_utils_ws/src/libfranka
+RUN git checkout "${LIB_FRANKA_VERSION}" \
+    && git submodule update --init --recursive
+
+# --- INSTALL ROSDEPS (ROOT) ---
+USER root
+WORKDIR /home/${USERNAME}/ros2_utils_ws
+RUN apt-get update \
+    && rosdep update \
+    && rosdep install --from-paths src --ignore-src --rosdistro "${ROS_DISTRO}" -y \
+    && rm -rf /var/lib/apt/lists/*
+
+# --- BUILD (USER) ---
+USER ${USERNAME}
+SHELL ["/bin/bash", "-c"]
+RUN source /opt/ros/"${ROS_DISTRO}"/setup.bash \
+    && colcon build --symlink-install \
+       --cmake-args -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_STANDARD=17
+
+# Consolidated Environment Setup
+RUN mkdir -p /home/${USERNAME}/share \
+    && echo "source ~/ros2_utils_ws/install/setup.bash" >> ~/.bashrc \
+    && echo "source ~/share/franka_ws/install/setup.bash" >> ~/.bashrc \
+    && echo "export GZ_SIM_RESOURCE_PATH=\$GZ_SIM_RESOURCE_PATH:/opt/ros/${ROS_DISTRO}/share:/home/${USERNAME}/ros2_utils_ws/install/franka_description/share:/home/${USERNAME}/share/franka_ws/install/robotiq_ft_sensor_description/share" >> ~/.bashrc
+
+# --- FINAL STEP (ROOT) ---
+# Necessary for the dynamic UID/GID entrypoint to work at runtime
+USER root
+WORKDIR /home/${USERNAME}
+
+# Copy the setup hook
+COPY robots/franka/setup_franka.sh /.entrypoint-setup/setup_franka.sh
+RUN chmod +x /.entrypoint-setup/setup_franka.sh

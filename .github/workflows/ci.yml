@@ -6,6 +6,7 @@ on:
     paths:
       - 'base/**'
       - 'robots/mantis/**'
+      - 'robots/franka/**'
       - '.github/workflows/ci.yml'
   schedule:
     - cron: '0 0 1 * *'
@@ -15,6 +16,7 @@ env:
   REGISTRY: ghcr.io
   IMAGE_BASE: ${{ github.repository }}-base
   IMAGE_MANTIS: ${{ github.repository }}-mantis
+  IMAGE_FRANKA: ${{ github.repository }}-franka
 
 jobs:
   build-base:
@@ -108,5 +110,52 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_MANTIS }}:${{ matrix.ros_distro }}-latest
             ${{ github.event_name == 'schedule' && format('{0}/{1}:{2}-{3}', env.REGISTRY, env.IMAGE_MANTIS, matrix.ros_distro, env.DATE_TAG) || '' }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+  build-franka:
+    needs: build-base
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        ros_distro: [humble]
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set date
+        run: echo "DATE_TAG=$(date +'%Y-%m')" >> $GITHUB_ENV
+
+      # --- LOGIQUE DE BACKUP FRANKA ---
+      - name: Backup latest to previous (Monthly only)
+        run: |
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_FRANKA }}:${{ matrix.ros_distro }}-latest || true
+          docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_FRANKA }}:${{ matrix.ros_distro }}-latest \
+                     ${{ env.REGISTRY }}/${{ env.IMAGE_FRANKA }}:${{ matrix.ros_distro }}-previous || true
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_FRANKA }}:${{ matrix.ros_distro }}-previous || true
+
+      # --- BUILD DE L'IMAGE FRANKA ---
+      - name: Build and push franka Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: robots/franka/Dockerfile.franka
+          push: true
+          build-args: |
+            BASE_IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}:${{ matrix.ros_distro }}-latest
+            ROS_DISTRO=${{ matrix.ros_distro }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_FRANKA }}:${{ matrix.ros_distro }}-latest
+            ${{ github.event_name == 'schedule' && format('{0}/{1}:{2}-{3}', env.REGISTRY, env.IMAGE_FRANKA, matrix.ros_distro, env.DATE_TAG) || '' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
