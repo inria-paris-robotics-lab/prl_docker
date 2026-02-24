@@ -1,0 +1,53 @@
+x-base-config: &base_config
+  image: ${IMAGE_NAME}
+  container_name: ${CONTAINER_NAME}
+  user: root
+  network_mode: host
+  ipc: host
+  privileged: true
+  stdin_open: true
+  tty: true
+  environment:
+    - DISPLAY=${DISPLAY}
+    - HOST_UID=${HOST_UID}
+    - HOST_GID=${HOST_GID}
+    - HOST_DOCKER_GID=${HOST_DOCKER_GID}
+    - HOST_RENDER_GID=${HOST_RENDER_GID}
+    - HOST_INPUT_GID=${HOST_INPUT_GID}
+    - HOST_VIDEO_GID=${HOST_VIDEO_GID}
+    - HOST_DIALOUT_GID=${HOST_DIALOUT_GID}
+    - QT_X11_NO_MITSHM=1
+  volumes:
+    - ${HOST_STORAGE}:/home/ros/share
+    - /var/run/docker.sock:/var/run/docker.sock
+    - /tmp/.X11-unix:/tmp/.X11-unix
+  devices:
+    - /dev:/dev # Allows access to hardware devices (e.g., USB cameras, robot interfaces)
+
+services:
+  # --- VERSION CPU ---
+  franka-cpu:
+    <<: *base_config
+
+  # --- VERSION GPU NVIDIA ---
+  franka-gpu:
+    <<: *base_config
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu, utility, compute]
+    environment:
+      - DISPLAY=${DISPLAY}
+      - HOST_UID=${HOST_UID}
+      - HOST_GID=${HOST_GID}
+      - HOST_DOCKER_GID=${HOST_DOCKER_GID}
+      - HOST_RENDER_GID=${HOST_RENDER_GID}
+      - HOST_INPUT_GID=${HOST_INPUT_GID}
+      - HOST_VIDEO_GID=${HOST_VIDEO_GID}
+      - HOST_DIALOUT_GID=${HOST_DIALOUT_GID}
+      - QT_X11_NO_MITSHM=1
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
