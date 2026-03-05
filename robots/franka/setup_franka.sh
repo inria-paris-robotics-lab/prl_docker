@@ -15,6 +15,8 @@ fi
 if [ ! -d "$WS_DIR/install" ]; then
   # shellcheck source=/dev/null
   source "/opt/ros/${ROS_DISTRO}/setup.bash"
+  # shellcheck source=/dev/null
+  source "/home/ros/ros2_utils_ws/install/setup.bash"
   cd "$WS_DIR"
   sudo apt update
   rosdep update
