@@ -22,6 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-${ROS_DISTRO}-moveit \
     ros-${ROS_DISTRO}-tf-transformations \
     ros-${ROS_DISTRO}-image-pipeline \
+    ros-${ROS_DISTRO}-plotjuggler-ros \
     && rm -rf /var/lib/apt/lists/*
 
 # Fix for tf-transformations (Pin version to satisfy Hadolint DL3013)

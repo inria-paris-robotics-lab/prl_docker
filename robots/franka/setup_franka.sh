@@ -16,6 +16,7 @@ if [ ! -d "$WS_DIR/install" ]; then
   # shellcheck source=/dev/null
   source "/opt/ros/${ROS_DISTRO}/setup.bash"
   cd "$WS_DIR"
+  sudo apt update
   rosdep update
   rosdep install -r --from-paths src --ignore-src --rosdistro "${ROS_DISTRO}" -y --skip-keys "warehouse_ros_mongo"
   colcon build --symlink-install

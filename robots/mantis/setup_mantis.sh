@@ -17,6 +17,7 @@ if [ ! -d "$SRC_DIR/prl_ur5_ros2" ]; then
   vcs import < "prl_ur5_ros2/dependencies.repos"
 
   cd "$WS_DIR"
+  sudo apt update
   rosdep update
   rosdep install -r --from-paths src --ignore-src --rosdistro "${ROS_DISTRO}" -y
   colcon build --symlink-install

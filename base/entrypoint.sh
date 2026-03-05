@@ -68,6 +68,7 @@ assign_gid "docker" "$HOST_DOCKER_GID"
 assign_gid "input"  "$HOST_INPUT_GID"
 assign_gid "render" "$HOST_RENDER_GID"
 assign_gid "video"  "$HOST_VIDEO_GID" # Useful for cameras
+assign_gid "dialout" "$HOST_DIALOUT_GID" # Useful for serial devices
 
 # 3. Environment Setup & Run
 # shellcheck source=/dev/null

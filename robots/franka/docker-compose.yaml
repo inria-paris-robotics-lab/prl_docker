@@ -21,9 +21,6 @@ x-base-config: &base_config
     - ${HOST_STORAGE}:/home/ros/share
     - /var/run/docker.sock:/var/run/docker.sock
     - /tmp/.X11-unix:/tmp/.X11-unix
-    - /tmp:/tmp  # INDISPENSABLE pour le socket /tmp/openvr4linux
-    - ${HOME}/.steam:${HOME}/.steam
-    - ${HOME}/.config/openvr:${HOME}/.config/openvr
   devices:
     - /dev:/dev # Allows access to hardware devices (e.g., USB cameras, robot interfaces)
 
