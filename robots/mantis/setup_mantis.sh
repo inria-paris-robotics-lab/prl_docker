@@ -14,8 +14,9 @@ if [ ! -d "$SRC_DIR/prl_ur5_ros2" ]; then
 
   # shellcheck source=/dev/null
   source "/opt/ros/${ROS_DISTRO}/setup.bash"
+  # shellcheck source=/dev/null
+  source "/home/ros/ros2_utils_ws/install/setup.bash"
   vcs import < "prl_ur5_ros2/dependencies.repos"
-
   cd "$WS_DIR"
   sudo apt update
   rosdep update
