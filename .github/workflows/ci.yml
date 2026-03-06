@@ -163,14 +163,6 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Delete old package versions (Mantis)
-        uses: actions/delete-package-versions@v5.0.0
-        with:
-          package-name: inria-paris-robotics-lab/prl_docker-mantis
-          package-type: 'container'
-          min-versions-to-keep: 2
-        continue-on-error: true
-
   build-franka:
     if: needs.detect-changes.outputs.franka == 'true' || needs.detect-changes.outputs.base == 'true'
     needs: [detect-changes, build-base]
@@ -222,14 +214,6 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_FRANKA }}:${{ matrix.ros_distro }}-${{ env.DATE_TAG }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      - name: Delete old package versions (Franka)
-        uses: actions/delete-package-versions@v5.0.0
-        with:
-          package-name: inria-paris-robotics-lab/prl_docker-franka
-          package-type: 'container'
-          min-versions-to-keep: 2
-        continue-on-error: true
 
   cleanup:
     needs: [build-base, build-mantis, build-franka]
