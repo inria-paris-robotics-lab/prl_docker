@@ -111,13 +111,6 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Delete old package versions (Base)
-        uses: actions/delete-package-versions@v5.0.0
-        with:
-          package-name: prl_docker-base
-          package-type: 'container'
-          min-versions-to-keep: 2
-
   build-mantis:
     if: needs.detect-changes.outputs.mantis == 'true' || needs.detect-changes.outputs.base == 'true'
     needs: [detect-changes, build-base]
@@ -173,9 +166,10 @@ jobs:
       - name: Delete old package versions (Mantis)
         uses: actions/delete-package-versions@v5.0.0
         with:
-          package-name: prl_docker-mantis
+          package-name: inria-paris-robotics-lab/prl_docker-mantis
           package-type: 'container'
           min-versions-to-keep: 2
+        continue-on-error: true
 
   build-franka:
     if: needs.detect-changes.outputs.franka == 'true' || needs.detect-changes.outputs.base == 'true'
@@ -232,6 +226,43 @@ jobs:
       - name: Delete old package versions (Franka)
         uses: actions/delete-package-versions@v5.0.0
         with:
-          package-name: prl_docker-franka
+          package-name: inria-paris-robotics-lab/prl_docker-franka
+          package-type: 'container'
+          min-versions-to-keep: 2
+        continue-on-error: true
+
+  cleanup:
+    needs: [build-base, build-mantis, build-franka]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+
+    steps:
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Delete old package versions (Base)
+        uses: actions/delete-package-versions@v5.0.0
+        with:
+          package-name: inria-paris-robotics-lab/prl_docker-base
+          package-type: 'container'
+          min-versions-to-keep: 4
+
+      - name: Delete old package versions (Mantis)
+        uses: actions/delete-package-versions@v5.0.0
+        with:
+          package-name: inria-paris-robotics-lab/prl_docker-mantis
+          package-type: 'container'
+          min-versions-to-keep: 2
+
+      - name: Delete old package versions (Franka)
+        uses: actions/delete-package-versions@v5.0.0
+        with:
+          package-name: inria-paris-robotics-lab/prl_docker-franka
           package-type: 'container'
           min-versions-to-keep: 2

@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=my-repo/base:humble
+ARG BASE_IMAGE=ghcr.io/inria-paris-robotics-lab/prl_docker-base:jazzy-latest
 FROM ${BASE_IMAGE}
 
 # --- IMPORTANT : REDÉCLARER LES ARGS ---

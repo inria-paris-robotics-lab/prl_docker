@@ -1,5 +1,5 @@
 # Global ARG before FROM
-ARG BASE_IMAGE=ghcr.io/votre-labo/prl_docker-base:humble-latest
+ARG BASE_IMAGE=ghcr.io/inria-paris-robotics-lab/prl_docker-base:humble-latest
 FROM ${BASE_IMAGE}
 
 # Re-declare ARGS for this stage
