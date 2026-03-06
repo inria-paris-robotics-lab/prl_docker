@@ -114,7 +114,7 @@ jobs:
       - name: Delete old package versions (Base)
         uses: actions/delete-package-versions@v5.0.0
         with:
-          package-name: ${{ env.IMAGE_BASE }}
+          package-name: prl_docker-base
           package-type: 'container'
           min-versions-to-keep: 2
 
@@ -173,7 +173,7 @@ jobs:
       - name: Delete old package versions (Mantis)
         uses: actions/delete-package-versions@v5.0.0
         with:
-          package-name: ${{ env.IMAGE_MANTIS }}
+          package-name: prl_docker-mantis
           package-type: 'container'
           min-versions-to-keep: 2
 
@@ -232,6 +232,6 @@ jobs:
       - name: Delete old package versions (Franka)
         uses: actions/delete-package-versions@v5.0.0
         with:
-          package-name: ${{ env.IMAGE_FRANKA }}
+          package-name: prl_docker-franka
           package-type: 'container'
           min-versions-to-keep: 2
