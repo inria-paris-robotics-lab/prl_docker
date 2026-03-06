@@ -64,7 +64,7 @@ jobs:
           build-args: ROS_DISTRO=${{ matrix.ros_distro }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}:${{ matrix.ros_distro }}-latest
-            ${{ github.event_name == 'schedule' && format('{0}/{1}:{2}-{3}', env.REGISTRY, env.IMAGE_BASE, matrix.ros_distro, env.DATE_TAG) || '' }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}:${{ matrix.ros_distro }}-${{ env.DATE_TAG }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -122,7 +122,7 @@ jobs:
             ROS_DISTRO=${{ matrix.ros_distro }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_MANTIS }}:${{ matrix.ros_distro }}-latest
-            ${{ github.event_name == 'schedule' && format('{0}/{1}:{2}-{3}', env.REGISTRY, env.IMAGE_MANTIS, matrix.ros_distro, env.DATE_TAG) || '' }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_MANTIS }}:${{ matrix.ros_distro }}-${{ env.DATE_TAG }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -180,7 +180,7 @@ jobs:
             ROS_DISTRO=${{ matrix.ros_distro }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_FRANKA }}:${{ matrix.ros_distro }}-latest
-            ${{ github.event_name == 'schedule' && format('{0}/{1}:{2}-{3}', env.REGISTRY, env.IMAGE_FRANKA, matrix.ros_distro, env.DATE_TAG) || '' }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_FRANKA }}:${{ matrix.ros_distro }}-${{ env.DATE_TAG }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
