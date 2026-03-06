@@ -28,6 +28,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
       - name: Detect file changes
         id: changes
@@ -37,8 +39,7 @@ jobs:
             echo "mantis=true" >> $GITHUB_OUTPUT
             echo "franka=true" >> $GITHUB_OUTPUT
           else
-            git fetch origin HEAD~1
-            CHANGED_FILES=$(git diff --name-only HEAD~1)
+            CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.event.after }})
 
             if echo "$CHANGED_FILES" | grep -qE '^base/|^\.github/workflows/ci\.yml'; then
               echo "base=true" >> $GITHUB_OUTPUT
