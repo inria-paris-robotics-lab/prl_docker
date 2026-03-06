@@ -19,8 +19,49 @@ env:
   IMAGE_FRANKA: ${{ github.repository }}-franka
 
 jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      base: ${{ steps.changes.outputs.base }}
+      mantis: ${{ steps.changes.outputs.mantis }}
+      franka: ${{ steps.changes.outputs.franka }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Detect file changes
+        id: changes
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "base=true" >> $GITHUB_OUTPUT
+            echo "mantis=true" >> $GITHUB_OUTPUT
+            echo "franka=true" >> $GITHUB_OUTPUT
+          else
+            git fetch origin HEAD~1
+            CHANGED_FILES=$(git diff --name-only HEAD~1)
+
+            if echo "$CHANGED_FILES" | grep -qE '^base/|^\.github/workflows/ci\.yml'; then
+              echo "base=true" >> $GITHUB_OUTPUT
+            else
+              echo "base=false" >> $GITHUB_OUTPUT
+            fi
+
+            if echo "$CHANGED_FILES" | grep -qE '^robots/mantis/'; then
+              echo "mantis=true" >> $GITHUB_OUTPUT
+            else
+              echo "mantis=false" >> $GITHUB_OUTPUT
+            fi
+
+            if echo "$CHANGED_FILES" | grep -qE '^robots/franka/'; then
+              echo "franka=true" >> $GITHUB_OUTPUT
+            else
+              echo "franka=false" >> $GITHUB_OUTPUT
+            fi
+          fi
+
   build-base:
-    if: contains(github.event.head_commit.modified, 'base/') || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    needs: detect-changes
+    if: needs.detect-changes.outputs.base == 'true'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -77,8 +118,8 @@ jobs:
           min-versions-to-keep: 2
 
   build-mantis:
-    if: contains(github.event.head_commit.modified, 'robots/mantis/') || contains(github.event.head_commit.modified, 'base/') || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    needs: build-base
+    if: needs.detect-changes.outputs.mantis == 'true' || needs.detect-changes.outputs.base == 'true'
+    needs: [detect-changes, build-base]
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -136,8 +177,8 @@ jobs:
           min-versions-to-keep: 2
 
   build-franka:
-    if: contains(github.event.head_commit.modified, 'robots/franka/') || contains(github.event.head_commit.modified, 'base/') || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    needs: build-base
+    if: needs.detect-changes.outputs.franka == 'true' || needs.detect-changes.outputs.base == 'true'
+    needs: [detect-changes, build-base]
     runs-on: ubuntu-latest
     strategy:
       matrix:
