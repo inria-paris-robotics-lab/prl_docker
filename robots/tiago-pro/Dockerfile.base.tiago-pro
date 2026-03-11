@@ -3,13 +3,12 @@
 # The SSL keys are passed as BuildKit secrets and NOT stored in the image
 
 ARG BASE_IMAGE=palrobotics/deploy-alum-edge-development:latest
-ARG ROS_DISTRO=jazzy
+FROM ${BASE_IMAGE} AS base
+
 ARG DISTRO=alum
 ARG TRACK=edge
 ARG RUN_BASE_INSTALL
 ARG RUN_EXTRA_INSTALL
-FROM ${BASE_IMAGE} AS base
-
 # Install SSL keys from BuildKit secrets (not stored in final image)
 RUN --mount=type=secret,id=pal_keys_deb \
     base64 -d /run/secrets/pal_keys_deb > /tmp/keys.deb && \
