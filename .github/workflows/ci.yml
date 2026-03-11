@@ -17,6 +17,7 @@ env:
   IMAGE_BASE: ${{ github.repository }}-base
   IMAGE_MANTIS: ${{ github.repository }}-mantis
   IMAGE_FRANKA: ${{ github.repository }}-franka
+  IMAGE_tiago-pro: ${{ github.repository }}-tiago-pro
 
 jobs:
   detect-changes:
@@ -38,10 +39,12 @@ jobs:
             echo "base=true" >> $GITHUB_OUTPUT
             echo "mantis=true" >> $GITHUB_OUTPUT
             echo "franka=true" >> $GITHUB_OUTPUT
+            echo "tiago-pro=true" >> $GITHUB_OUTPUT
+
           else
             CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.event.after }})
 
-            if echo "$CHANGED_FILES" | grep -qE '^base/|^\.github/workflows/ci\.yml'; then
+            if echo "$CHANGED_FILES" | grep -qE '^base/' ; then
               echo "base=true" >> $GITHUB_OUTPUT
             else
               echo "base=false" >> $GITHUB_OUTPUT
@@ -57,6 +60,12 @@ jobs:
               echo "franka=true" >> $GITHUB_OUTPUT
             else
               echo "franka=false" >> $GITHUB_OUTPUT
+            fi
+
+            if echo "$CHANGED_FILES" | grep -qE '^robots/tiago-pro/'; then
+              echo "tiago-pro=true" >> $GITHUB_OUTPUT
+            else
+              echo "tiago-pro=false" >> $GITHUB_OUTPUT
             fi
           fi
 
@@ -233,20 +242,31 @@ jobs:
       - name: Delete old package versions (Base)
         uses: actions/delete-package-versions@v5.0.0
         with:
-          package-name: inria-paris-robotics-lab/prl_docker-base
+          package-name: prl_docker-base
           package-type: 'container'
-          min-versions-to-keep: 4
+          delete-only-untagged-versions: true
+          ignore-versions: |
+            humble-latest
+            humble-previous
+            jazzy-latest
+            jazzy-previous
 
       - name: Delete old package versions (Mantis)
         uses: actions/delete-package-versions@v5.0.0
         with:
-          package-name: inria-paris-robotics-lab/prl_docker-mantis
+          package-name: prl_docker-mantis
           package-type: 'container'
-          min-versions-to-keep: 2
+          delete-only-untagged-versions: true
+          ignore-versions: |
+            jazzy-latest
+            jazzy-previous
 
       - name: Delete old package versions (Franka)
         uses: actions/delete-package-versions@v5.0.0
         with:
-          package-name: inria-paris-robotics-lab/prl_docker-franka
+          package-name: prl_docker-franka
           package-type: 'container'
-          min-versions-to-keep: 2
+          delete-only-untagged-versions: true
+          ignore-versions: |
+            humble-latest
+            humble-previous
