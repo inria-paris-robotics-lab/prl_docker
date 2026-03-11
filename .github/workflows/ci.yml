@@ -256,7 +256,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
-          file: robots/tiago-pro/Dockerfile.tiago-pro
+          file: robots/tiago-pro/Dockerfile.base.tiago-pro
           push: true
           build-args: |
             BASE_IMAGE=palrobotics/deploy-alum-${{ matrix.track }}-tiago-pro:latest
