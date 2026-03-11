@@ -240,7 +240,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Delete old package versions (Base)
-        uses: actions/delete-package-versions@v5.0.0
+        uses: actions/delete-package-versions@v6.0.0
         with:
           package-name: prl_docker-base
           package-type: 'container'
@@ -252,7 +252,7 @@ jobs:
             jazzy-previous
 
       - name: Delete old package versions (Mantis)
-        uses: actions/delete-package-versions@v5.0.0
+        uses: actions/delete-package-versions@v6.0.0
         with:
           package-name: prl_docker-mantis
           package-type: 'container'
@@ -262,7 +262,7 @@ jobs:
             jazzy-previous
 
       - name: Delete old package versions (Franka)
-        uses: actions/delete-package-versions@v5.0.0
+        uses: actions/delete-package-versions@v6.0.0
         with:
           package-name: prl_docker-franka
           package-type: 'container'
