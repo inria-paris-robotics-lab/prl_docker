@@ -23,51 +23,35 @@ jobs:
   detect-changes:
     runs-on: ubuntu-latest
     outputs:
-      base: ${{ steps.changes.outputs.base }}
-      mantis: ${{ steps.changes.outputs.mantis }}
-      franka: ${{ steps.changes.outputs.franka }}
+      base: ${{ steps.schedule-check.outputs.base || steps.changed-files.outputs.base_any_changed }}
+      mantis: ${{ steps.schedule-check.outputs.mantis || steps.changed-files.outputs.mantis_any_changed }}
+      franka: ${{ steps.schedule-check.outputs.franka || steps.changed-files.outputs.franka_any_changed }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
         with:
-          fetch-depth: 2
+          fetch-depth: 0
+
+      - name: Force rebuild on schedule or manual trigger
+        id: schedule-check
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        run: |
+          echo "base=true" >> $GITHUB_OUTPUT
+          echo "mantis=true" >> $GITHUB_OUTPUT
+          echo "franka=true" >> $GITHUB_OUTPUT
 
       - name: Detect file changes
-        id: changes
-        run: |
-          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "base=true" >> $GITHUB_OUTPUT
-            echo "mantis=true" >> $GITHUB_OUTPUT
-            echo "franka=true" >> $GITHUB_OUTPUT
-            echo "tiago-pro=true" >> $GITHUB_OUTPUT
-
-          else
-            CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.event.after }})
-
-            if echo "$CHANGED_FILES" | grep -qE '^base/' ; then
-              echo "base=true" >> $GITHUB_OUTPUT
-            else
-              echo "base=false" >> $GITHUB_OUTPUT
-            fi
-
-            if echo "$CHANGED_FILES" | grep -qE '^robots/mantis/'; then
-              echo "mantis=true" >> $GITHUB_OUTPUT
-            else
-              echo "mantis=false" >> $GITHUB_OUTPUT
-            fi
-
-            if echo "$CHANGED_FILES" | grep -qE '^robots/franka/'; then
-              echo "franka=true" >> $GITHUB_OUTPUT
-            else
-              echo "franka=false" >> $GITHUB_OUTPUT
-            fi
-
-            if echo "$CHANGED_FILES" | grep -qE '^robots/tiago-pro/'; then
-              echo "tiago-pro=true" >> $GITHUB_OUTPUT
-            else
-              echo "tiago-pro=false" >> $GITHUB_OUTPUT
-            fi
-          fi
+        id: changed-files
+        if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
+        uses: tj-actions/changed-files@v47
+        with:
+          files_yaml: |
+            base:
+              - 'base/**'
+            mantis:
+              - 'robots/mantis/**'
+            franka:
+              - 'robots/franka/**'
 
   build-base:
     needs: detect-changes
