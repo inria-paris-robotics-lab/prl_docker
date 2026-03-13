@@ -9,7 +9,7 @@ fi
 
 CONTAINER_NAME="$1"
 HOST_STORAGE=$(realpath "$2")
-IMAGE_TO_USE="prl:franka-humble"
+IMAGE_TO_USE="ghcr.io/inria-paris-robotics-lab/prl_docker-franka:humble-latest"
 REBUILD=false
 USE_GPU=true
 

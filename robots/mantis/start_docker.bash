@@ -9,7 +9,7 @@ fi
 
 CONTAINER_NAME="$1"
 HOST_STORAGE=$(realpath "$2")
-IMAGE_TO_USE="prl:mantis-jazzy"
+IMAGE_TO_USE="ghcr.io/inria-paris-robotics-lab/prl_docker-mantis:jazzy-latest"
 REBUILD=false
 USE_GPU=true
 
