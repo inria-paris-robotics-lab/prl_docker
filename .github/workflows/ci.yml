@@ -102,6 +102,7 @@ jobs:
           context: .
           file: base/Dockerfile.base
           push: true
+          provenance: false
           build-args: ROS_DISTRO=${{ matrix.ros_distro }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}:${{ matrix.ros_distro }}-latest
@@ -152,6 +153,7 @@ jobs:
           context: .
           file: robots/mantis/Dockerfile.mantis
           push: true
+          provenance: false
           build-args: |
             BASE_IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}:${{ matrix.ros_distro }}-latest
             ROS_DISTRO=${{ matrix.ros_distro }}
@@ -204,6 +206,7 @@ jobs:
           context: .
           file: robots/franka/Dockerfile.franka
           push: true
+          provenance: false
           build-args: |
             BASE_IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}:${{ matrix.ros_distro }}-latest
             ROS_DISTRO=${{ matrix.ros_distro }}
@@ -258,6 +261,7 @@ jobs:
           context: .
           file: robots/tiago-pro/Dockerfile.base.tiago-pro
           push: true
+          provenance: false
           build-args: |
             BASE_IMAGE=palrobotics/deploy-alum-${{ matrix.track }}-tiago-pro:latest
             DISTRO=${{ matrix.ros_distro }}
@@ -324,5 +328,5 @@ jobs:
           package-type: 'container'
           delete-only-untagged-versions: true
           ignore-versions: |
-            jazzy-edge-latest
-            jazzy-edge-previous
+            alum-edge-latest
+            alum-edge-previous
