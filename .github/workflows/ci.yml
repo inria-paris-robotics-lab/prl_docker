@@ -52,9 +52,11 @@ jobs:
             base:
               - 'base/**'
             mantis:
-              - 'robots/mantis/**'
+              - 'robots/mantis/Dockerfile.mantis'
+              - 'robots/mantis/setup_mantis.sh'
             franka:
-              - 'robots/franka/**'
+              - 'robots/franka/Dockerfile.franka'
+              - 'robots/franka/setup_franka.sh'
             tiago-pro:
               - 'robots/tiago-pro/**'
 
