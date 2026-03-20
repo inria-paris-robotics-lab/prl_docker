@@ -11,6 +11,7 @@ if [ ! -d "$SRC_DIR/prl_franka" ]; then
   cd "$SRC_DIR"
 
   git clone --recursive https://github.com/inria-paris-robotics-lab/prl_franka.git
+  git clone https://github.com/inria-paris-robotics-lab/robotiq.git
 fi
 if [ ! -d "$WS_DIR/install" ]; then
   # shellcheck source=/dev/null
