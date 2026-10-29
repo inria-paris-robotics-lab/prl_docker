@@ -20,11 +20,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   ros-${ROS_DISTRO}-librealsense2* \
   ros-${ROS_DISTRO}-realsense2-* \
   ros-${ROS_DISTRO}-moveit \
-  ros-${ROS_DISTRO}-moveit-py \
   ros-${ROS_DISTRO}-tf-transformations \
   ros-${ROS_DISTRO}-image-pipeline \
   ros-${ROS_DISTRO}-plotjuggler-ros \
   && rm -rf /var/lib/apt-get/lists/*
+
+RUN apt-get update && \
+    if apt-cache show ros-${ROS_DISTRO}-moveit-py >/dev/null 2>&1; then \
+        apt-get install -y ros-${ROS_DISTRO}-moveit-py --no-install-recommends; \
+    else \
+        apt-get install -y ros-${ROS_DISTRO}-pymoveit2 --no-install-recommends; \
+    fi && \
+    rm -rf /var/lib/apt/lists/*
 
 # Orbbec driver dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -39,6 +46,27 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   ros-${ROS_DISTRO}-statistics-msgs \
   ros-${ROS_DISTRO}-backward-ros libdw-dev \
   && rm -rf /var/lib/apt-get/lists/*
+
+# Camera calibration (prl_camera_calib): python dependencies and MC-Calib build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  python3-numpy python3-scipy python3-yaml python3-opencv python3-pil \
+  ros-${ROS_DISTRO}-ur-msgs ros-${ROS_DISTRO}-xacro \
+  build-essential cmake \
+  libopencv-dev libopencv-contrib-dev libceres-dev libgoogle-glog-dev libeigen3-dev \
+  libboost-log-dev libboost-system-dev libboost-test-dev \
+  && rm -rf /var/lib/apt/lists/*
+
+# pyorbbecsdk (camera_rig orbbec_rig): --no-deps keeps the system numpy / OpenCV that ROS is built against
+RUN pip install --no-cache-dir --no-deps --break-system-packages pyorbbecsdk2==2.1.2
+
+# MC-Calib, binary on the PATH as mc_calib_calibrate
+ARG MC_CALIB_COMMIT=77cb043
+RUN git clone https://github.com/rameau-fr/MC-Calib.git /opt/MC-Calib \
+  && git -C /opt/MC-Calib checkout ${MC_CALIB_COMMIT} \
+  && cmake -S /opt/MC-Calib -B /opt/MC-Calib/build -DCMAKE_BUILD_TYPE=Release \
+  && cmake --build /opt/MC-Calib/build --target calibrate -j"$(nproc)" \
+  && ln -s /opt/MC-Calib/build/apps/calibrate/calibrate /usr/local/bin/mc_calib_calibrate
+
 
 ################################
 # Dependencies built from source

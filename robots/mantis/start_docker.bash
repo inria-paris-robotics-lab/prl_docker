@@ -42,6 +42,7 @@ HOST_RENDER_GID=$(getent group render | cut -d: -f3 || echo 107)
 HOST_INPUT_GID=$(getent group input | cut -d: -f3 || echo 106)
 HOST_VIDEO_GID=$(getent group video | cut -d: -f3 || echo 44)
 HOST_DIALOUT_GID=$(getent group dialout | cut -d: -f3 || echo 20)
+HOST_PLUGDEV_GID=$(getent group plugdev | cut -d: -f3 || echo 46)
 
 export HOST_UID
 export HOST_GID
@@ -50,6 +51,7 @@ export HOST_RENDER_GID
 export HOST_INPUT_GID
 export HOST_VIDEO_GID
 export HOST_DIALOUT_GID
+export HOST_PLUGDEV_GID
 
 # Allow local docker containers to access the X server
 xhost +local:docker > /dev/null 2>&1

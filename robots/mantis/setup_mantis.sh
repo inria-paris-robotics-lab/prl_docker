@@ -20,7 +20,7 @@ if [ ! -d "$SRC_DIR/prl_ur5_ros2" ]; then
   cd "$WS_DIR"
   sudo apt update
   rosdep update
-  rosdep install -r --from-paths src --ignore-src --rosdistro "${ROS_DISTRO}" -y
+  rosdep install -r --from-paths src --ignore-src --rosdistro "${ROS_DISTRO}" -y --skip-keys warehouse_ros_mongo
   colcon build --symlink-install
 fi
 
