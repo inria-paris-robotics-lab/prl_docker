@@ -15,7 +15,7 @@ repos:
       - id: hadolint
         name: Lint Dockerfiles
         language: docker_image
-        entry: --rm hadolint/hadolint:latest-debian hadolint
+        entry: --rm hadolint/hadolint:v2.14.0-debian hadolint
         files: ^.*Dockerfile.*$
         # DL3008: apt versions, DL3002: Last user root (nécessaire pour entrypoint),
         # DL3059: multiple RUN (plus lisible), DL4006: pipefail
