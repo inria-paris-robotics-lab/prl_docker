@@ -2,7 +2,6 @@ name: PRL Docker CI
 
 on:
   push:
-    branches: [ "master" ]
     paths:
       - 'base/**'
       - 'robots/mantis/**'
@@ -13,8 +12,16 @@ on:
     - cron: '0 0 1 * *'
   workflow_dispatch: # Allow manual triggering of the workflow
 
+# Serialize runs so concurrent pushes don't race on the history tag rotation
+concurrency:
+  group: ci-${{ github.ref }}
+  # Never cancel on master (backup/push in progress), cancel stale branch builds
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+
 env:
   REGISTRY: ghcr.io
+  # Branches only check that images build; only master pushes to the registry
+  PUBLISH: ${{ github.ref == 'refs/heads/master' }}
   IMAGE_BASE: ${{ github.repository }}-base
   IMAGE_MANTIS: ${{ github.repository }}-mantis
   IMAGE_FRANKA: ${{ github.repository }}-franka
@@ -85,35 +92,62 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set labels and dates
-        run: |
-          echo "DATE_TAG=$(date +'%Y-%m')" >> $GITHUB_ENV
+      # --- HISTORY (latest, previous, previous-2): read digests now, rotate only after a successful push ---
+      # crane retags the manifest as-is (imagetools create would wrap it in a new index,
+      # leaving the original untagged and deleted by cleanup)
+      - name: Set up crane
+        if: env.PUBLISH == 'true'
+        uses: imjasonh/setup-crane@v0.4
 
-      # --- LOGIC OF BACKUP N-1 ---
-      - name: Backup latest to previous
+      - name: Get current digests
+        id: old
+        if: env.PUBLISH == 'true'
+        env:
+          IMG: ${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}:${{ matrix.ros_distro }}
+        # Empty when the tag doesn't exist yet
         run: |
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}:${{ matrix.ros_distro }}-latest || true
-          docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}:${{ matrix.ros_distro }}-latest \
-                     ${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}:${{ matrix.ros_distro }}-previous || true
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}:${{ matrix.ros_distro }}-previous || true
+          echo "latest=$(crane digest "$IMG-latest" || true)" >> "$GITHUB_OUTPUT"
+          echo "previous=$(crane digest "$IMG-previous" || true)" >> "$GITHUB_OUTPUT"
+
+      - name: Set date
+        run: echo "DATE_TAG=$(date +'%Y-%m')" >> "$GITHUB_ENV"
 
       # --- BUILD BASE IMAGE ---
       - name: Build and push Base Image
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: .
           file: base/Dockerfile.base
-          push: true
+          push: ${{ env.PUBLISH == 'true' }}
+          # Monthly rebuild: fresh upstream image and apt packages
+          pull: ${{ github.event_name == 'schedule' }}
+          no-cache: ${{ github.event_name == 'schedule' }}
           provenance: false
           build-args: ROS_DISTRO=${{ matrix.ros_distro }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}:${{ matrix.ros_distro }}-latest
             ${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}:${{ matrix.ros_distro }}-${{ env.DATE_TAG }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=base-${{ matrix.ros_distro }}
+          cache-to: type=gha,mode=max,scope=base-${{ matrix.ros_distro }}
+
+      # Untagged old N-2 is then removed by the cleanup job
+      - name: Rotate history tags
+        if: env.PUBLISH == 'true' && steps.old.outputs.latest != '' && steps.old.outputs.latest != steps.build.outputs.digest
+        env:
+          REPO: ${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}
+          PREFIX: ${{ matrix.ros_distro }}
+          OLD_LATEST: ${{ steps.old.outputs.latest }}
+          OLD_PREVIOUS: ${{ steps.old.outputs.previous }}
+        run: |
+          if [ -n "$OLD_PREVIOUS" ]; then
+            crane tag "$REPO@$OLD_PREVIOUS" "$PREFIX-previous-2"
+          fi
+          crane tag "$REPO@$OLD_LATEST" "$PREFIX-previous"
 
   build-mantis:
-    if: needs.detect-changes.outputs.mantis == 'true' || needs.detect-changes.outputs.base == 'true'
+    # !failure() so a skipped build-base doesn't skip this job
+    if: ${{ !failure() && !cancelled() && (needs.detect-changes.outputs.mantis == 'true' || needs.detect-changes.outputs.base == 'true') }}
     needs: [detect-changes, build-base]
     runs-on: ubuntu-latest
     strategy:
@@ -137,36 +171,78 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set date
-        run: echo "DATE_TAG=$(date +'%Y-%m')" >> $GITHUB_ENV
+      # --- HISTORY (latest, previous, previous-2): read digests now, rotate only after a successful push ---
+      # crane retags the manifest as-is (imagetools create would wrap it in a new index,
+      # leaving the original untagged and deleted by cleanup)
+      - name: Set up crane
+        if: env.PUBLISH == 'true'
+        uses: imjasonh/setup-crane@v0.4
 
-      # --- BACKUP MANTIS ---
-      - name: Backup latest to previous
+      - name: Get current digests
+        id: old
+        if: env.PUBLISH == 'true'
+        env:
+          IMG: ${{ env.REGISTRY }}/${{ env.IMAGE_MANTIS }}:${{ matrix.ros_distro }}
+        # Empty when the tag doesn't exist yet
         run: |
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_MANTIS }}:${{ matrix.ros_distro }}-latest || true
-          docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_MANTIS }}:${{ matrix.ros_distro }}-latest \
-                     ${{ env.REGISTRY }}/${{ env.IMAGE_MANTIS }}:${{ matrix.ros_distro }}-previous || true
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_MANTIS }}:${{ matrix.ros_distro }}-previous || true
+          echo "latest=$(crane digest "$IMG-latest" || true)" >> "$GITHUB_OUTPUT"
+          echo "previous=$(crane digest "$IMG-previous" || true)" >> "$GITHUB_OUTPUT"
+
+      # --- BRANCH: TEST AGAINST THIS BRANCH'S BASE (not master's -latest) ---
+      - name: Build branch base image
+        if: env.PUBLISH != 'true' && needs.detect-changes.outputs.base == 'true'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: base/Dockerfile.base
+          provenance: false
+          build-args: ROS_DISTRO=${{ matrix.ros_distro }}
+          outputs: type=oci,dest=/tmp/base-image,tar=false,name=prl-base:latest
+          cache-from: type=gha,scope=base-${{ matrix.ros_distro }}
+
+      - name: Set date
+        run: echo "DATE_TAG=$(date +'%Y-%m')" >> "$GITHUB_ENV"
 
       # --- BUILD IMAGE MANTIS ---
       - name: Build and push Mantis Image
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: .
           file: robots/mantis/Dockerfile.mantis
-          push: true
+          push: ${{ env.PUBLISH == 'true' }}
+          # Monthly rebuild: fresh upstream image and apt packages
+          pull: ${{ github.event_name == 'schedule' }}
+          no-cache: ${{ github.event_name == 'schedule' }}
           provenance: false
           build-args: |
             BASE_IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}:${{ matrix.ros_distro }}-latest
             ROS_DISTRO=${{ matrix.ros_distro }}
+          # Overrides BASE_IMAGE with the local branch base when it was built above
+          build-contexts: ${{ (env.PUBLISH != 'true' && needs.detect-changes.outputs.base == 'true') && format('{0}/{1}:{2}-latest=oci-layout:///tmp/base-image:latest', env.REGISTRY, env.IMAGE_BASE, matrix.ros_distro) || '' }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_MANTIS }}:${{ matrix.ros_distro }}-latest
             ${{ env.REGISTRY }}/${{ env.IMAGE_MANTIS }}:${{ matrix.ros_distro }}-${{ env.DATE_TAG }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=mantis-${{ matrix.ros_distro }}
+          cache-to: type=gha,mode=max,scope=mantis-${{ matrix.ros_distro }}
+
+      # Untagged old N-2 is then removed by the cleanup job
+      - name: Rotate history tags
+        if: env.PUBLISH == 'true' && steps.old.outputs.latest != '' && steps.old.outputs.latest != steps.build.outputs.digest
+        env:
+          REPO: ${{ env.REGISTRY }}/${{ env.IMAGE_MANTIS }}
+          PREFIX: ${{ matrix.ros_distro }}
+          OLD_LATEST: ${{ steps.old.outputs.latest }}
+          OLD_PREVIOUS: ${{ steps.old.outputs.previous }}
+        run: |
+          if [ -n "$OLD_PREVIOUS" ]; then
+            crane tag "$REPO@$OLD_PREVIOUS" "$PREFIX-previous-2"
+          fi
+          crane tag "$REPO@$OLD_LATEST" "$PREFIX-previous"
 
   build-franka:
-    if: needs.detect-changes.outputs.franka == 'true' || needs.detect-changes.outputs.base == 'true'
+    # !failure() so a skipped build-base doesn't skip this job
+    if: ${{ !failure() && !cancelled() && (needs.detect-changes.outputs.franka == 'true' || needs.detect-changes.outputs.base == 'true') }}
     needs: [detect-changes, build-base]
     runs-on: ubuntu-latest
     strategy:
@@ -190,33 +266,74 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set date
-        run: echo "DATE_TAG=$(date +'%Y-%m')" >> $GITHUB_ENV
+      # --- HISTORY (latest, previous, previous-2): read digests now, rotate only after a successful push ---
+      # crane retags the manifest as-is (imagetools create would wrap it in a new index,
+      # leaving the original untagged and deleted by cleanup)
+      - name: Set up crane
+        if: env.PUBLISH == 'true'
+        uses: imjasonh/setup-crane@v0.4
 
-      # --- BACKUP FRANKA ---
-      - name: Backup latest to previous
+      - name: Get current digests
+        id: old
+        if: env.PUBLISH == 'true'
+        env:
+          IMG: ${{ env.REGISTRY }}/${{ env.IMAGE_FRANKA }}:${{ matrix.ros_distro }}
+        # Empty when the tag doesn't exist yet
         run: |
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_FRANKA }}:${{ matrix.ros_distro }}-latest || true
-          docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_FRANKA }}:${{ matrix.ros_distro }}-latest \
-                     ${{ env.REGISTRY }}/${{ env.IMAGE_FRANKA }}:${{ matrix.ros_distro }}-previous || true
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_FRANKA }}:${{ matrix.ros_distro }}-previous || true
+          echo "latest=$(crane digest "$IMG-latest" || true)" >> "$GITHUB_OUTPUT"
+          echo "previous=$(crane digest "$IMG-previous" || true)" >> "$GITHUB_OUTPUT"
+
+      # --- BRANCH: TEST AGAINST THIS BRANCH'S BASE (not master's -latest) ---
+      - name: Build branch base image
+        if: env.PUBLISH != 'true' && needs.detect-changes.outputs.base == 'true'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: base/Dockerfile.base
+          provenance: false
+          build-args: ROS_DISTRO=${{ matrix.ros_distro }}
+          outputs: type=oci,dest=/tmp/base-image,tar=false,name=prl-base:latest
+          cache-from: type=gha,scope=base-${{ matrix.ros_distro }}
+
+      - name: Set date
+        run: echo "DATE_TAG=$(date +'%Y-%m')" >> "$GITHUB_ENV"
 
       # --- BUILD DE L'IMAGE FRANKA ---
       - name: Build and push franka Image
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: .
           file: robots/franka/Dockerfile.franka
-          push: true
+          push: ${{ env.PUBLISH == 'true' }}
+          # Monthly rebuild: fresh upstream image and apt packages
+          pull: ${{ github.event_name == 'schedule' }}
+          no-cache: ${{ github.event_name == 'schedule' }}
           provenance: false
           build-args: |
             BASE_IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_BASE }}:${{ matrix.ros_distro }}-latest
             ROS_DISTRO=${{ matrix.ros_distro }}
+          # Overrides BASE_IMAGE with the local branch base when it was built above
+          build-contexts: ${{ (env.PUBLISH != 'true' && needs.detect-changes.outputs.base == 'true') && format('{0}/{1}:{2}-latest=oci-layout:///tmp/base-image:latest', env.REGISTRY, env.IMAGE_BASE, matrix.ros_distro) || '' }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_FRANKA }}:${{ matrix.ros_distro }}-latest
             ${{ env.REGISTRY }}/${{ env.IMAGE_FRANKA }}:${{ matrix.ros_distro }}-${{ env.DATE_TAG }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=franka-${{ matrix.ros_distro }}
+          cache-to: type=gha,mode=max,scope=franka-${{ matrix.ros_distro }}
+
+      # Untagged old N-2 is then removed by the cleanup job
+      - name: Rotate history tags
+        if: env.PUBLISH == 'true' && steps.old.outputs.latest != '' && steps.old.outputs.latest != steps.build.outputs.digest
+        env:
+          REPO: ${{ env.REGISTRY }}/${{ env.IMAGE_FRANKA }}
+          PREFIX: ${{ matrix.ros_distro }}
+          OLD_LATEST: ${{ steps.old.outputs.latest }}
+          OLD_PREVIOUS: ${{ steps.old.outputs.previous }}
+        run: |
+          if [ -n "$OLD_PREVIOUS" ]; then
+            crane tag "$REPO@$OLD_PREVIOUS" "$PREFIX-previous-2"
+          fi
+          crane tag "$REPO@$OLD_LATEST" "$PREFIX-previous"
 
   build-tiago-pro:
     if: needs.detect-changes.outputs.tiago-pro == 'true'
@@ -244,25 +361,37 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set date
-        run: echo "DATE_TAG=$(date +'%Y-%m')" >> $GITHUB_ENV
+      # --- HISTORY (latest, previous, previous-2): read digests now, rotate only after a successful push ---
+      # crane retags the manifest as-is (imagetools create would wrap it in a new index,
+      # leaving the original untagged and deleted by cleanup)
+      - name: Set up crane
+        if: env.PUBLISH == 'true'
+        uses: imjasonh/setup-crane@v0.4
 
-      # --- BACKUP TIAGO-PRO ---
-      - name: Backup latest to previous
-        continue-on-error: true
+      - name: Get current digests
+        id: old
+        if: env.PUBLISH == 'true'
+        env:
+          IMG: ${{ env.REGISTRY }}/${{ env.IMAGE_TIAGO_PRO }}:${{ matrix.ros_distro }}-${{ matrix.track }}
+        # Empty when the tag doesn't exist yet
         run: |
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_TIAGO_PRO }}:${{ matrix.ros_distro }}-${{ matrix.track }}-latest || true
-          docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_TIAGO_PRO }}:${{ matrix.ros_distro }}-${{ matrix.track }}-latest \
-                     ${{ env.REGISTRY }}/${{ env.IMAGE_TIAGO_PRO }}:${{ matrix.ros_distro }}-${{ matrix.track }}-previous || true
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_TIAGO_PRO }}:${{ matrix.ros_distro }}-${{ matrix.track }}-previous || true
+          echo "latest=$(crane digest "$IMG-latest" || true)" >> "$GITHUB_OUTPUT"
+          echo "previous=$(crane digest "$IMG-previous" || true)" >> "$GITHUB_OUTPUT"
+
+      - name: Set date
+        run: echo "DATE_TAG=$(date +'%Y-%m')" >> "$GITHUB_ENV"
 
       # --- BUILD TIAGO-PRO ---
       - name: Build and push tiago-pro Image
+        id: build
         uses: docker/build-push-action@v7
         with:
           context: .
           file: robots/tiago-pro/Dockerfile.base.tiago-pro
-          push: true
+          push: ${{ env.PUBLISH == 'true' }}
+          # Monthly rebuild: fresh upstream image and apt packages
+          pull: ${{ github.event_name == 'schedule' }}
+          no-cache: ${{ github.event_name == 'schedule' }}
           provenance: false
           build-args: |
             BASE_IMAGE=palrobotics/deploy-alum-${{ matrix.track }}-tiago-pro:latest
@@ -273,62 +402,47 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_TIAGO_PRO }}:${{ matrix.ros_distro }}-${{ matrix.track }}-${{ env.DATE_TAG }}
           secrets: |
             "pal_keys_deb=${{ secrets.PAL_KEYS_DEB }}"
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=tiago-pro-${{ matrix.ros_distro }}-${{ matrix.track }}
+          cache-to: type=gha,mode=max,scope=tiago-pro-${{ matrix.ros_distro }}-${{ matrix.track }}
+
+      # Untagged old N-2 is then removed by the cleanup job
+      - name: Rotate history tags
+        if: env.PUBLISH == 'true' && steps.old.outputs.latest != '' && steps.old.outputs.latest != steps.build.outputs.digest
+        env:
+          REPO: ${{ env.REGISTRY }}/${{ env.IMAGE_TIAGO_PRO }}
+          PREFIX: ${{ matrix.ros_distro }}-${{ matrix.track }}
+          OLD_LATEST: ${{ steps.old.outputs.latest }}
+          OLD_PREVIOUS: ${{ steps.old.outputs.previous }}
+        run: |
+          if [ -n "$OLD_PREVIOUS" ]; then
+            crane tag "$REPO@$OLD_PREVIOUS" "$PREFIX-previous-2"
+          fi
+          crane tag "$REPO@$OLD_LATEST" "$PREFIX-previous"
 
   cleanup:
     needs: [build-base, build-mantis, build-franka, build-tiago-pro]
-    if: always()
+    if: always() && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     permissions:
       packages: write
 
     steps:
-      - name: Log in to the Container registry
-        uses: docker/login-action@v4
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Delete old package versions (Base)
-        uses: actions/delete-package-versions@v5.0.0
-        with:
-          package-name: prl_docker-base
-          package-type: 'container'
-          delete-only-untagged-versions: true
-          ignore-versions: |
-            humble-latest
-            humble-previous
-            jazzy-latest
-            jazzy-previous
-
-      - name: Delete old package versions (Mantis)
-        uses: actions/delete-package-versions@v5.0.0
-        with:
-          package-name: prl_docker-mantis
-          package-type: 'container'
-          delete-only-untagged-versions: true
-          ignore-versions: |
-            jazzy-latest
-            jazzy-previous
-
-      - name: Delete old package versions (Franka)
-        uses: actions/delete-package-versions@v5.0.0
-        with:
-          package-name: prl_docker-franka
-          package-type: 'container'
-          delete-only-untagged-versions: true
-          ignore-versions: |
-            humble-latest
-            humble-previous
-
-      - name: Delete old package versions (Tiago-Pro)
-        uses: actions/delete-package-versions@v5.0.0
-        with:
-          package-name: prl_docker-tiago-pro
-          package-type: 'container'
-          delete-only-untagged-versions: true
-          ignore-versions: |
-            alum-edge-latest
-            alum-edge-previous
+      # Keep only versions tagged latest, previous, previous-2 or dated from the last 3 months;
+      # everything else (old dated tags, untagged) is deleted
+      - name: Delete old package versions
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ORG: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+        run: |
+          months=$(for i in 0 1 2; do date -d "$(date +%Y-%m-01) -$i month" +%Y-%m; done | paste -sd'|')
+          keep="-(latest|previous|previous-2|$months)\$"
+          echo "Keeping tags matching: $keep"
+          for img in base mantis franka tiago-pro; do
+            api="/orgs/$ORG/packages/container/$REPO-$img/versions"
+            gh api --paginate "$api" --jq ".[] | select(any(.metadata.container.tags[]; test(\"$keep\")) | not) | .id" |
+              while read -r id; do
+                echo "Deleting $REPO-$img version $id"
+                gh api -X DELETE "$api/$id"
+              done
+          done
