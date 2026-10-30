@@ -78,6 +78,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends\
   libcanberra-gtk3-module \
   at-spi2-core \
   can-utils \
+  pip \
   && rm -rf /var/lib/apt/lists/*
 
 # Générer l'ID machine DBUS (statique)
