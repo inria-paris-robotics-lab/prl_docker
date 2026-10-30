@@ -12,12 +12,6 @@ on:
     - cron: '0 0 1 * *'
   workflow_dispatch: # Allow manual triggering of the workflow
 
-# Serialize runs so concurrent pushes don't race on the history tag rotation
-concurrency:
-  group: ci-${{ github.ref }}
-  # Never cancel on master (backup/push in progress), cancel stale branch builds
-  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
-
 env:
   REGISTRY: ghcr.io
   # Branches only check that images build; only master pushes to the registry
@@ -70,6 +64,10 @@ jobs:
   build-base:
     needs: detect-changes
     if: needs.detect-changes.outputs.base == 'true'
+    # Job-level (not workflow-level, which can leave runs stuck in "Queued"):
+    # serialize runs per image so they don't race on the history tag rotation
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-base-${{ matrix.ros_distro }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -149,6 +147,10 @@ jobs:
     # !failure() so a skipped build-base doesn't skip this job
     if: ${{ !failure() && !cancelled() && (needs.detect-changes.outputs.mantis == 'true' || needs.detect-changes.outputs.base == 'true') }}
     needs: [detect-changes, build-base]
+    # Job-level (not workflow-level, which can leave runs stuck in "Queued"):
+    # serialize runs per image so they don't race on the history tag rotation
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-mantis-${{ matrix.ros_distro }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -244,6 +246,10 @@ jobs:
     # !failure() so a skipped build-base doesn't skip this job
     if: ${{ !failure() && !cancelled() && (needs.detect-changes.outputs.franka == 'true' || needs.detect-changes.outputs.base == 'true') }}
     needs: [detect-changes, build-base]
+    # Job-level (not workflow-level, which can leave runs stuck in "Queued"):
+    # serialize runs per image so they don't race on the history tag rotation
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-franka-${{ matrix.ros_distro }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -338,6 +344,10 @@ jobs:
   build-tiago-pro:
     if: needs.detect-changes.outputs.tiago-pro == 'true'
     needs: detect-changes
+    # Job-level (not workflow-level, which can leave runs stuck in "Queued"):
+    # serialize runs per image so they don't race on the history tag rotation
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-tiago-pro-${{ matrix.ros_distro }}-${{ matrix.track }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
