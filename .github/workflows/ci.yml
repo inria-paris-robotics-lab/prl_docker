@@ -8,6 +8,14 @@ on:
       - 'robots/franka/**'
       - 'robots/tiago-pro/**'
       - '.github/workflows/ci.yml'
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'base/**'
+      - 'robots/mantis/**'
+      - 'robots/franka/**'
+      - 'robots/tiago-pro/**'
+      - '.github/workflows/ci.yml'
   schedule:
     - cron: '0 0 1 * *'
   workflow_dispatch: # Allow manual triggering of the workflow
