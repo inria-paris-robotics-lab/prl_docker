@@ -135,9 +135,7 @@ RUN PYTHON_VER=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.v
  && echo "export PKG_CONFIG_PATH=/opt/openrobots/lib/pkgconfig:\$PKG_CONFIG_PATH" >> /home/${USERNAME}/.bashrc \
  && echo "export LD_LIBRARY_PATH=/opt/openrobots/lib:\$LD_LIBRARY_PATH" >> /home/${USERNAME}/.bashrc \
  && echo "export CMAKE_PREFIX_PATH=/opt/openrobots:\$CMAKE_PREFIX_PATH" >> /home/${USERNAME}/.bashrc \
- && echo "export PYTHONPATH=\$PYTHONPATH:/opt/openrobots/lib/python${PYTHON_VER}/site-packages" >> /home/${USERNAME}/.bashrc \
- && echo "export PYTHONPATH=\$PYTHONPATH:/home/ros/share/install/lib/python${PYTHON_VER}/site-packages" >> /home/${USERNAME}/.bashrc \
- && echo "export PYTHONPATH=\$PYTHONPATH:/openrobots/lib/python${PYTHON_VER}/site-packages" >> /home/${USERNAME}/.bashrc
+ && echo "export PYTHONPATH=\$PYTHONPATH:/opt/openrobots/lib/python${PYTHON_VER}/site-packages" >> /home/${USERNAME}/.bashrc
 
 # --- FINAL SETUP ---
 COPY base/entrypoint.sh /usr/local/bin/entrypoint.sh
