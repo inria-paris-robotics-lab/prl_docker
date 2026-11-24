@@ -1,0 +1,26 @@
+# Python deps installed with uv (uv pip install) on top of the apt/ROS ones (Dockerfile.mantis).
+# They land in /usr/local and shadow the apt python3-* packages for the whole container, so
+# numpy is 2.x everywhere: anything added here must support numpy 2.
+# torch / torchvision are NOT here: installed just before, from the CUDA or CPU index
+# (build arg TORCH_VARIANT); pip keeps them as they satisfy lerobot's range.
+# Known casualty: apt cv_bridge is built for numpy 1.x and fails to import (unused today).
+
+numpy>=2.0,<2.3                  # lerobot 0.6.1 range
+setuptools>=71,<80               # lerobot needs >=71; 80 drops `develop`, needed by colcon --symlink-install
+protobuf<7                       # wandb (lerobot dep) refuses 7.x
+
+# LeRobot dataset recording / replay / async inference (prl_teleop recorder_node)
+lerobot[async,dataset]==0.6.1
+torchcodec==0.10.*               # must match torch (0.10 <-> 2.10); lerobot allows up to 0.11, built for torch 2.11
+
+# VR teleop IK (prl_teleop): pinocchio + pink + QP solver
+pin==4.1.0
+pin-pink==4.4.0
+qpsolvers
+daqp
+typing_extensions                # undeclared dependency of pink.tasks
+
+# numpy-2 builds of what apt ships for numpy 1.x
+scipy>=1.14
+transforms3d>=0.4.2              # apt 0.4.1 breaks tf_transformations (prl_ur5_calibration) under numpy 2
+opencv-python-headless>=4.10     # apt cv2 4.6 is built for numpy 1.x; headless: no Qt clash with the system Qt
