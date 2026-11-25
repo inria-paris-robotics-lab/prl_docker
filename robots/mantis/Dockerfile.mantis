@@ -20,8 +20,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   ros-${ROS_DISTRO}-tf-transformations \
   ros-${ROS_DISTRO}-image-pipeline \
   ros-${ROS_DISTRO}-plotjuggler-ros \
+  ros-${ROS_DISTRO}-rmw-cyclonedds-cpp \
   adb \
   && rm -rf /var/lib/apt/lists/*
+
+# DDS: CycloneDDS instead of the default Fast DDS (Fast DDS drops large camera images).
+# ENV (not .bashrc) so every process gets it, including `docker exec` and launch files.
+# Host kernel side: install robots/mantis/10-ros-dds.conf in /etc/sysctl.d/ on the host.
+COPY robots/mantis/cyclonedds.xml /etc/cyclonedds/cyclonedds.xml
+ENV RMW_IMPLEMENTATION=rmw_cyclonedds_cpp \
+    CYCLONEDDS_URI=file:///etc/cyclonedds/cyclonedds.xml
 
 RUN apt-get update && \
     if apt-cache show ros-${ROS_DISTRO}-moveit-py >/dev/null 2>&1; then \
