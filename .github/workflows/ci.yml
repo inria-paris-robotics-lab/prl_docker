@@ -63,6 +63,7 @@ jobs:
             mantis:
               - 'robots/mantis/Dockerfile.mantis'
               - 'robots/mantis/setup_mantis.sh'
+              - 'robots/mantis/requirements.txt'
             franka:
               - 'robots/franka/Dockerfile.franka'
               - 'robots/franka/setup_franka.sh'

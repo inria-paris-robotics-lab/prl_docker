@@ -23,6 +23,7 @@ x-base-config: &base_config
     - /var/run/docker.sock:/var/run/docker.sock
     - /tmp/.X11-unix:/tmp/.X11-unix
     - /dev:/dev # Allows access to hardware devices (e.g., USB cameras, robot interfaces)
+    - ${HOME}/.android:/home/ros/.android # adb key persists across `run --rm`: the Quest stays authorized
 
 services:
   # --- VERSION CPU ---

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  CycloneDDS config for the mantis image (large camera images: Orbbec Femto Mega, RealSense).
+  Loaded through CYCLONEDDS_URI (see Dockerfile.mantis).
+
+  Discovery range is NOT set here: it follows ROS_AUTOMATIC_DISCOVERY_RANGE (LOCALHOST in the
+  base image), so changing that variable is enough to talk to other machines.
+
+  The receive buffer needs the HOST kernel to allow it (net.core.rmem_max), see
+  10-ros-dds.conf next to this file.
+-->
+<CycloneDDS xmlns="https://cdds.io/config"
+            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+            xsi:schemaLocation="https://cdds.io/config https://raw.githubusercontent.com/eclipse-cyclonedds/cyclonedds/master/etc/cyclonedds.xsd">
+  <Domain Id="any">
+    <Internal>
+      <!-- A 1280x720 RGB image is ~2.7 MB: the default socket buffer (a few hundred kB) overflows
+           and the whole sample is lost when one fragment is dropped.
+           max: requested size; min="default": do not fail to start on a host whose rmem_max is
+           still low (Cyclone then only logs a warning and runs with a smaller buffer). -->
+      <SocketReceiveBufferSize min="default" max="64MB"/>
+    </Internal>
+  </Domain>
+</CycloneDDS>

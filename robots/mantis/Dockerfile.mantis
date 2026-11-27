@@ -1,13 +1,10 @@
 ARG BASE_IMAGE=ghcr.io/inria-paris-robotics-lab/prl_docker-base:jazzy-latest
 FROM ${BASE_IMAGE}
 
-# --- IMPORTANT : REDÉCLARER LES ARGS ---
-# Les ARGs sont vidés après le FROM, il faut les remettre
 ARG ROS_DISTRO=jazzy
 ARG USERNAME=ros
 ENV DEBIAN_FRONTEND=noninteractive
 
-# On passe en ROOT pour les installations système
 USER root
 
 # Install ROS2 dependencies
@@ -23,7 +20,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   ros-${ROS_DISTRO}-tf-transformations \
   ros-${ROS_DISTRO}-image-pipeline \
   ros-${ROS_DISTRO}-plotjuggler-ros \
+  ros-${ROS_DISTRO}-rmw-cyclonedds-cpp \
+  adb \
   && rm -rf /var/lib/apt/lists/*
+
+# DDS: CycloneDDS instead of the default Fast DDS (Fast DDS drops large camera images).
+# ENV (not .bashrc) so every process gets it, including `docker exec` and launch files.
+# Host kernel side: install robots/mantis/10-ros-dds.conf in /etc/sysctl.d/ on the host.
+COPY robots/mantis/cyclonedds.xml /etc/cyclonedds/cyclonedds.xml
+ENV RMW_IMPLEMENTATION=rmw_cyclonedds_cpp \
+    CYCLONEDDS_URI=file:///etc/cyclonedds/cyclonedds.xml
 
 RUN apt-get update && \
     if apt-cache show ros-${ROS_DISTRO}-moveit-py >/dev/null 2>&1; then \
@@ -56,8 +62,31 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   libboost-log-dev libboost-system-dev libboost-test-dev \
   && rm -rf /var/lib/apt/lists/*
 
-# pyorbbecsdk (camera_rig orbbec_rig): --no-deps keeps the system numpy / OpenCV that ROS is built against
-RUN pip install --no-cache-dir --no-deps --break-system-packages pyorbbecsdk2==2.1.2
+# Python packages go through uv (parallel downloads, fast resolver) into /usr/local, shadowing the
+# apt python3-* ones. --compile-bytecode as pip does, so the first torch/lerobot import is not slow.
+COPY --from=ghcr.io/astral-sh/uv:0.12.24 /uv /usr/local/bin/uv
+ENV UV_SYSTEM_PYTHON=1 UV_BREAK_SYSTEM_PACKAGES=1 UV_NO_CACHE=1 UV_COMPILE_BYTECODE=1
+
+# pyorbbecsdk (camera_rig orbbec_rig): --no-deps, numpy / OpenCV come from requirements.txt below
+RUN uv pip install --no-deps pyorbbecsdk2==2.1.2
+
+# torch first, from the CUDA or CPU wheel index: cu128 also runs on a PC without GPU (falls back
+# to CPU) but adds ~5 GB; TORCH_VARIANT=cpu for a smaller image. Versions inside lerobot 0.6.1's range.
+ARG TORCH_VARIANT=cu128
+RUN uv pip install --index-url https://download.pytorch.org/whl/${TORCH_VARIANT} \
+      torch==2.10.0 torchvision==0.25.0
+
+# Python deps (lerobot, pinocchio/pink, numpy-2 builds of scipy/opencv/transforms3d): add new ones there
+COPY robots/mantis/requirements.txt /tmp/requirements.txt
+# lerobot pulls the cmake 4 wheel, which shadows apt cmake 3.28 and rejects old cmake_minimum_required
+# (MC-Calib, many ROS packages): remove it, lerobot does not run cmake.
+RUN uv pip install -r /tmp/requirements.txt \
+  && uv pip uninstall cmake \
+  && echo /opt/openrobots/lib > /etc/ld.so.conf.d/openrobots.conf && ldconfig \
+  && cmake --version | grep -q "^cmake version 3\." \
+  && . /opt/ros/${ROS_DISTRO}/setup.sh \
+  && python3 -c "import lerobot, torch, numpy, cv2, pinocchio, pink, qpsolvers, tf_transformations, rclpy; \
+print('python deps OK: numpy', numpy.__version__, '| torch', torch.__version__, '| cv2', cv2.__version__)"
 
 # MC-Calib, binary on the PATH as mc_calib_calibrate
 ARG MC_CALIB_COMMIT=77cb043
@@ -88,9 +117,14 @@ RUN source /opt/ros/${ROS_DISTRO}/setup.bash \
     && colcon build --cmake-args -DCMAKE_BUILD_TYPE=Release
 
 # --- UPDATE .bashrc ---
+# hadolint ignore=SC2016
 RUN mkdir -p /home/${USERNAME}/share \
     && echo "source ~/ros2_utils_ws/install/setup.bash" >> ~/.bashrc \
     && echo "source ~/share/mantis_ws/install/setup.bash" >> ~/.bashrc \
+    `# robotpkg pinocchio (numpy 1.x) on PYTHONPATH / LD_LIBRARY_PATH shadows the pip numpy-2 wheel:` \
+    `# drop both, C++ still finds /opt/openrobots/lib through ld.so.conf (set above)` \
+    && echo 'export PYTHONPATH=${PYTHONPATH//:\/opt\/openrobots\/lib\/python3.12\/site-packages/}' >> ~/.bashrc \
+    && echo 'export LD_LIBRARY_PATH=${LD_LIBRARY_PATH//\/opt\/openrobots\/lib:/}' >> ~/.bashrc \
     && echo "export GZ_SIM_RESOURCE_PATH=\$GZ_SIM_RESOURCE_PATH:/opt/ros/${ROS_DISTRO}/share:/home/${USERNAME}/ros2_utils_ws/install/orbbec_description/share:/home/${USERNAME}/share/mantis_ws/install/robotiq_ft_sensor_description/share" >> ~/.bashrc
 
 # --- FINAL STEP ---
