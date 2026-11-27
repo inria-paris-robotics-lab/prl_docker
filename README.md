@@ -76,7 +76,7 @@ The `docker-compose.yml` is pre-configured for:
 ## 📁 Workspace Structure
 Inside the container, the environment is organized as follows:
 *   `/home/ros/share/mantis_ws/src`: Your local project folder (bind-mounted, editable in real-time).
-*   `/home/ros/ros2_utils_ws`: Compiled system utilities (e.g., OrbbecSDK).
+*   `/home/ros/ros2_utils_ws`: Compiled system utilities (e.g., franka_ros2).
 *   `/opt/openrobots`: Pinocchio installation path.
 
 ## ➕ Adding a New Project/Robot
