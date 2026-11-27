@@ -1,12 +1,12 @@
 # Global ARG before FROM
-ARG BASE_IMAGE=ghcr.io/inria-paris-robotics-lab/prl_docker-base:humble-latest
+ARG BASE_IMAGE=ghcr.io/inria-paris-robotics-lab/prl_docker-base:jazzy-latest
 FROM ${BASE_IMAGE}
 
 # Re-declare ARGS for this stage
-ARG ROS_DISTRO=humble
+ARG ROS_DISTRO=jazzy
 ARG USERNAME=ros
-ARG FRANKA_ROS2_VERSION=v2.1.0
-ARG LIB_FRANKA_VERSION=0.15.0
+# franka_ros2 >= v3 is jazzy-only; libfranka/franka_description versions are pinned by its dependency.repos
+ARG FRANKA_ROS2_VERSION=v3.6.1
 ENV DEBIAN_FRONTEND=noninteractive
 
 # --- SYSTEM INSTALLATION (ROOT) ---
@@ -23,10 +23,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-${ROS_DISTRO}-tf-transformations \
     ros-${ROS_DISTRO}-image-pipeline \
     ros-${ROS_DISTRO}-plotjuggler-ros \
+    ros-${ROS_DISTRO}-mujoco-ros2-control \
+    ros-${ROS_DISTRO}-orbbec-camera \
+    ros-${ROS_DISTRO}-orbbec-description \
+    ros-${ROS_DISTRO}-image-transport-plugins \
+    python3-pyassimp \
     && rm -rf /var/lib/apt/lists/*
-
-# Fix for tf-transformations (Pin version to satisfy Hadolint DL3013)
-RUN pip3 install --no-cache-dir transforms3d==0.4.1
 
 ################################
 # Dependencies built from source
@@ -38,19 +40,14 @@ WORKDIR /home/${USERNAME}/ros2_utils_ws/src
 
 # Clone Franka ROS 2
 RUN git clone -b "${FRANKA_ROS2_VERSION}" https://github.com/frankarobotics/franka_ros2.git franka_ros2 \
-    && vcs import . < franka_ros2/franka.repos --recursive --skip-existing
-
-# Setup specific libfranka version
-WORKDIR /home/${USERNAME}/ros2_utils_ws/src/libfranka
-RUN git checkout "${LIB_FRANKA_VERSION}" \
-    && git submodule update --init --recursive
+    && vcs import . < franka_ros2/dependency.repos --recursive --skip-existing
 
 # --- INSTALL ROSDEPS (ROOT) ---
 USER root
 WORKDIR /home/${USERNAME}/ros2_utils_ws
 RUN apt-get update \
     && rosdep update \
-    && rosdep install --from-paths src --ignore-src --rosdistro "${ROS_DISTRO}" -y \
+    && rosdep install --from-paths src --ignore-src --rosdistro "${ROS_DISTRO}" -y --skip-keys=zed_wrapper \
     && rm -rf /var/lib/apt/lists/*
 
 # --- BUILD (USER) ---
@@ -58,7 +55,7 @@ USER ${USERNAME}
 SHELL ["/bin/bash", "-c"]
 RUN source /opt/ros/"${ROS_DISTRO}"/setup.bash \
     && colcon build --symlink-install \
-       --cmake-args -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_STANDARD=17
+       --cmake-args -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_STANDARD=17 -DBUILD_TESTING=OFF -DBUILD_TESTS=OFF
 
 # Consolidated Environment Setup
 RUN mkdir -p /home/${USERNAME}/share \

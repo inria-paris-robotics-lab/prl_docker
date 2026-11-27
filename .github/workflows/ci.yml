@@ -262,7 +262,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        ros_distro: [humble]
+        ros_distro: [jazzy]
     permissions:
       contents: read
       packages: write

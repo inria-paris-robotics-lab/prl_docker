@@ -39,18 +39,11 @@ RUN apt-get update && \
     fi && \
     rm -rf /var/lib/apt/lists/*
 
-# Orbbec driver dependencies
+# Orbbec ROS 2 driver (apt binaries, pulls its own deps); plugins add compressed image transport
 RUN apt-get update && apt-get install -y --no-install-recommends \
-  libgflags-dev nlohmann-json3-dev \
-  ros-${ROS_DISTRO}-image-transport \
+  ros-${ROS_DISTRO}-orbbec-camera \
+  ros-${ROS_DISTRO}-orbbec-description \
   ros-${ROS_DISTRO}-image-transport-plugins \
-  ros-${ROS_DISTRO}-compressed-image-transport \
-  ros-${ROS_DISTRO}-image-publisher \
-  ros-${ROS_DISTRO}-camera-info-manager \
-  ros-${ROS_DISTRO}-diagnostic-updater \
-  ros-${ROS_DISTRO}-diagnostic-msgs \
-  ros-${ROS_DISTRO}-statistics-msgs \
-  ros-${ROS_DISTRO}-backward-ros libdw-dev \
   && rm -rf /var/lib/apt/lists/*
 
 # Camera calibration (prl_camera_calib): python dependencies and MC-Calib build dependencies
@@ -97,35 +90,19 @@ RUN git clone https://github.com/rameau-fr/MC-Calib.git /opt/MC-Calib \
   && ln -s /opt/MC-Calib/build/apps/calibrate/calibrate /usr/local/bin/mc_calib_calibrate
 
 
-################################
-# Dependencies built from source
-################################
-# On passe temporairement en USER ros pour compiler proprement
-# Cela évite d'avoir des fichiers root dans le home
 USER ${USERNAME}
 WORKDIR /home/${USERNAME}
-
-# Create a directory to store data
-RUN mkdir -p share
 SHELL ["/bin/bash", "-c"]
-
-# Compilation Orbbec
-WORKDIR /home/${USERNAME}/ros2_utils_ws/src
-RUN git clone https://github.com/orbbec/OrbbecSDK_ROS2.git -b v2-main
-WORKDIR /home/${USERNAME}/ros2_utils_ws
-RUN source /opt/ros/${ROS_DISTRO}/setup.bash \
-    && colcon build --cmake-args -DCMAKE_BUILD_TYPE=Release
 
 # --- UPDATE .bashrc ---
 # hadolint ignore=SC2016
 RUN mkdir -p /home/${USERNAME}/share \
-    && echo "source ~/ros2_utils_ws/install/setup.bash" >> ~/.bashrc \
     && echo "source ~/share/mantis_ws/install/setup.bash" >> ~/.bashrc \
     `# robotpkg pinocchio (numpy 1.x) on PYTHONPATH / LD_LIBRARY_PATH shadows the pip numpy-2 wheel:` \
     `# drop both, C++ still finds /opt/openrobots/lib through ld.so.conf (set above)` \
     && echo 'export PYTHONPATH=${PYTHONPATH//:\/opt\/openrobots\/lib\/python3.12\/site-packages/}' >> ~/.bashrc \
     && echo 'export LD_LIBRARY_PATH=${LD_LIBRARY_PATH//\/opt\/openrobots\/lib:/}' >> ~/.bashrc \
-    && echo "export GZ_SIM_RESOURCE_PATH=\$GZ_SIM_RESOURCE_PATH:/opt/ros/${ROS_DISTRO}/share:/home/${USERNAME}/ros2_utils_ws/install/orbbec_description/share:/home/${USERNAME}/share/mantis_ws/install/robotiq_ft_sensor_description/share" >> ~/.bashrc
+    && echo "export GZ_SIM_RESOURCE_PATH=\$GZ_SIM_RESOURCE_PATH:/opt/ros/${ROS_DISTRO}/share:/home/${USERNAME}/share/mantis_ws/install/robotiq_ft_sensor_description/share" >> ~/.bashrc
 
 # --- FINAL STEP ---
 # Update .bashrc and Gazebo paths (Consolidated RUN instructions)
