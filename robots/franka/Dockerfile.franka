@@ -24,6 +24,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-${ROS_DISTRO}-image-pipeline \
     ros-${ROS_DISTRO}-plotjuggler-ros \
     ros-${ROS_DISTRO}-mujoco-ros2-control \
+    ros-${ROS_DISTRO}-orbbec-camera \
+    ros-${ROS_DISTRO}-orbbec-description \
+    ros-${ROS_DISTRO}-image-transport-plugins \
     python3-pyassimp \
     && rm -rf /var/lib/apt/lists/*
 
